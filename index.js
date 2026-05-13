@@ -12,7 +12,7 @@ function isStringArray(arr) {
 //device
 function Device(name, offOnLeave) {
     this.__id = Device.nextId++;
-    this.__name = this.name(name);
+    this.__name = name;
     this.__isOn = false;
     this.__devices = [];
     this.__offOnLeave = offOnLeave;
@@ -24,10 +24,23 @@ Device.prototype.getOffOnLeave = function () {
     return this.__offOnLeave;
 }
 
+Device.prototype.constructor = function () {
+    throw new Error("Device is abstract ");
+}
+
 Device.prototype.getId = function () {
     return this.__id;
 }
 
+Device.prototype.info = function () {
+    var res = 
+        "--- " + this.__name + " ---\n" + 
+        "devices: " + this.__devices + "\n" + 
+        "is on: " + this.__isOn + "\n" + 
+        "turn off on leave: " + this.__offOnLeave;
+
+    return res;
+}
 
 Device.prototype.name = function (name) {
     if ( name !== undefined ) { 
@@ -39,6 +52,10 @@ Device.prototype.name = function (name) {
     } else {
         return this.__name;
     }
+}
+
+Device.prototype.toString = function () {
+    return this.name();
 }
 
 Device.prototype.isOn = function (val) {
@@ -56,9 +73,16 @@ Device.prototype.isOn = function (val) {
 Device.prototype.addDevice = function (device) {
     if ( device instanceof Device ) {
         this.__devices.push(device)
+        this.addDevices(device.getDevices());
     } else {
         var error = new TypeError("Only objects of type \"Device\" can be added")
         throw error;
+    }
+}
+
+Device.prototype.addDevices = function (devices) {
+    for ( var i = 0 ; i < devices.length ; i ++ ) {
+        this.addDevice(devices[i]);
     }
 }
 
@@ -93,7 +117,7 @@ Device.prototype.getDevice = function (name) {
 
 Device.prototype.removeDevice = function (name) {
     if ( typeof name === "string" ) {
-        name = name().toLowerCase();
+        name = name.toLowerCase();
     } else {
         throw new TypeError("Parameter \"name\" must be a string");
     }
@@ -110,30 +134,32 @@ Device.prototype.removeDevice = function (name) {
 }
 
 //tv
-function Tv(name, remote) {
+function Tv(name, device) {
     Device.call(this, name, true);
     this.__volume = 1;
     this.__channels = ["National Geographic", "Nickelodeon", "Fox", "NBC"];
     this.__channel = 0;
 
-    if ( remote !== undefined ) {
-        if ( remote instanceof TvRemote ) {
-            remote.tv(this);
+    if ( device !== undefined ) {
+        if ( device instanceof TvRemote ) {
+            device.tv(this);
         }
-        this.addDevice(remote);
+        this.addDevice(device);
     }
 }
 
 Tv.prototype = Object.create(Device.prototype)
 Tv.prototype.constructor = Tv;
 
+
 Tv.prototype.info = function () {
-    console.log(
-        `--- Tv ${this.__name} ---
-        channels: ${this.__channels}
-        current channel: ${this.__channels[this.__channel]}
-        volume: ${this.__volume * 100}%`
-    )
+    var res = 
+        "--- Tv " + this.__name + " ---\n" + 
+        "channels: " + this.__channels + "\n" + 
+        "current channel: " +this.__channels[this.__channel] + "\n" +
+        "volume: " + ( this.__volume * 100 ) + "%\n";
+    
+    return res;
 }
 
 Tv.prototype.volume = function (val) {
@@ -155,7 +181,7 @@ Tv.prototype.channel = function (val) {
 
     if ( typeof val === "number" && val % 1 === 0 ) {
         if ( val > this.__channels.length-1 || val < 0 ) {
-            var error = new Error("number must be within the range of (0-" + this.__channels.length-1 + ")");
+            var error = new Error("number must be within the range of (0-" + ( this.__channels.length-1 ) + ")");
             error.name = "OutOfBoundsException";
             throw error;
         }
@@ -165,18 +191,18 @@ Tv.prototype.channel = function (val) {
     }
 }
 
-Tv.prototype.getChannelName = function (id) {
-    if ( id === undefined ) {
+Tv.prototype.getChannelName = function (index) {
+    if ( index === undefined ) {
         throw new Error("Must include a parameter")
     }
 
-    if ( typeof id === "number" && id % 1 === 0 ) {
-        if ( id > this.__channels.length-1 || id < 0 ) {
-            var error = new Error("number must be within the range of (0-" + this.__channels.length-1 + ")");
+    if ( typeof index === "number" && index % 1 === 0 ) {
+        if ( index > this.__channels.length-1 || index < 0 ) {
+            var error = new Error("number must be within the range of (0-" + ( this.__channels.length-1 ) + ")");
             error.name = "OutOfBoundsException";
             throw error;
         }
-        return this.__channels[id];
+        return this.__channels[index];
     } else {
         throw new TypeError("Parameter \"val\" must be an integer");
     }
@@ -201,24 +227,36 @@ Tv.prototype.channelsInfo = function () {
         res += "\t" + (i) + ". " + item + "\n";
     }
 
-    return res;
+    console.log(res);
 }
 
 //remote
-function TvRemote(name) {
-    Device.call(this, name);
+function TvRemote(name, tv) {
+    Device.call(this, name, false);
     this.__tv = undefined;
     this.__battery = 1;
+
+    if ( tv instanceof Tv ) {
+        this.__tv = tv;
+        for ( var i = 0 ; i < tv.getDevices().length ; i++ ) {
+            if ( tv.getDevices()[i] === this ) {
+                return;
+            }
+        }
+
+        tv.addDevice(this);
+    }
 }
 
 TvRemote.prototype = Object.create(Device.prototype)
 TvRemote.prototype.constructor = TvRemote;
 
 TvRemote.prototype.info = function () {
-    console.log(
-        `--- TvRemote ${this.__name} ---
-        Tv: ${this.__tv}`
-    )
+    var res = 
+        "--- TvRemote " + this.__name + " ---\n" +
+        "Tv: " + this.__tv;
+
+    return res
 }
 
 TvRemote.prototype.tv = function (tv) {
@@ -228,7 +266,6 @@ TvRemote.prototype.tv = function (tv) {
 
     if ( tv instanceof Tv ) {
         this.__tv = tv;
-        this.__count = this.__tv.channels().length;
     } else {
         throw new TypeError("Parameter \"tv\" must be a Tv type object")
     }
@@ -237,6 +274,7 @@ TvRemote.prototype.tv = function (tv) {
 TvRemote.prototype.OnOffTv  = function () {
     if ( this.tv() === undefined ) {
         console.log("no tv connected");
+        return;
     }
     if ( this.__tv.isOn() ) {
         this.__tv.isOn(false);
@@ -250,6 +288,7 @@ TvRemote.prototype.OnOffTv  = function () {
 TvRemote.prototype.volume = function (val) {
     if ( this.tv() === undefined ) {
         console.log("no tv connected");
+        return;
     }
     if ( val === undefined ) {
         return this.__tv.volume();
@@ -265,32 +304,37 @@ TvRemote.prototype.volume = function (val) {
 TvRemote.prototype.channel = function (channel) {
     if ( this.tv() === undefined ) {
         console.log("no tv connected");
+        return;
     }
     return this.tv().channel(channel);
 }
 
 TvRemote.prototype.nextChannel = function () {
     var current = this.tv().channel();
-    this.tv().channel((current+1) % this.tv().channels().length);
+    this.channel((current+1) % this.tv().channels().length);
+
+    return this.channel();
 }
 
 TvRemote.prototype.prevChannel = function () {
     var nextChannel = this.tv().channel() - 1;
     if ( nextChannel === -1 ) nextChannel = this.tv().channels().length - 1;
     this.channel(nextChannel);
+
+    return this.channel();
 }
 
 function Curtains(name) {
-    Device.call(this, name);
-    this.__open = true;
+    Device.call(this, name, true);
 }
+
 
 //curtains
 Curtains.prototype = Object.create(Device.prototype);
 Curtains.prototype.constructor = Curtains;
 
 Curtains.prototype.open = function () {
-    if ( this.__open ) {
+    if ( this.__isOn ) {
         console.log("already open")
         return;
     }
@@ -299,7 +343,7 @@ Curtains.prototype.open = function () {
     console.log("Opening the curtains...");
     setTimeout(
         function () {
-            self.__open = true;
+            self.isOn(true);
             console.log("The curtains are opened!")
         },
         5000
@@ -307,7 +351,7 @@ Curtains.prototype.open = function () {
 }
 
 Curtains.prototype.close = function () {
-    if ( !this.__open ) {
+    if ( !this.__isOn ) {
         console.log("already closed")
         return;
     }
@@ -316,7 +360,7 @@ Curtains.prototype.close = function () {
     console.log("Closing the curtains...");
     setTimeout(
         function () {
-            self.__open = false;
+            self.isOn(false);
             console.log("The curtains are closed!")
         },
         5000
@@ -367,3 +411,37 @@ SmartHouse.prototype.leave = function () {
         }
     }
 }
+SmartHouse.prototype.enter = function () {
+    var devices = this.getDevices();
+
+    for (var i = 0 ; i < devices.length ; i++ ) {
+        if ( devices[i].getOffOnLeave() ) {
+            devices[i].isOn(true);
+        }
+    }
+}
+
+SmartHouse.prototype.devicesInfo = function () {
+    var res = "Devices: \n"
+    var length = this.getDevices().length;
+    for ( var i = 0 ; i < length; i++ ) {
+        var item = this.getDevices()[i];
+        res += "\t" + (i+1) + ". " + item + "\n";
+    }
+
+    console.log(res);
+}
+
+
+var house = new SmartHouse("myHome");
+
+var remote = new TvRemote("samsung remote");
+var tv = new Tv("samsung tv", remote);
+
+var curtains = new Curtains("curtains living room");
+var fridge = new Fridge("myFridge")
+
+house.addDevices([tv, curtains, fridge])
+
+console.log( house.getDevice("tv").info());
+console.log( house.getDevice("curtains").info());
